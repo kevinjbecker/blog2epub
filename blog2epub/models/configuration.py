@@ -39,12 +39,13 @@ class ConfigurationModel(BaseModel):
     use_cache: bool = False
     destination_folder: str = str(Path.home())
     include_images: bool = True
-    images_size: tuple[int, int] = (600, 800)
-    images_quality: int = 40
-    images_bw: bool = True
+    images_size: tuple[int, int] = (2160, 3840)
+    images_quality: int = 85
+    images_bw: bool = False
     url: str = ""
     limit: str = "5"
     skip: str = ""
+    engine: str = "default"
     history: list[str] = field(default_factory=list)
     email: str = ""
     version: str = ""

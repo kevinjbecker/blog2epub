@@ -179,8 +179,12 @@ class Downloader:
             picture = Image.open(original_fn)
             if picture.size[0] > self.images_size[0] or picture.size[1] > self.images_size[1]:
                 picture.thumbnail(self.images_size, Image.LANCZOS)  # type: ignore
-            converted_picture = picture.convert("L")
-            converted_picture.save(resized_fn, format="JPEG", quality=self.images_quality)
+            
+            if(picture.mode != "RGB"):
+                picture = picture.convert("RGB")
+
+            #converted_picture = picture.convert("L")
+            picture.save(resized_fn, format="JPEG", quality=self.images_quality)
             try:
                 os.remove(original_fn)
             except PermissionError:

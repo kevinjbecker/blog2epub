@@ -23,3 +23,6 @@ _site
 *.blogspot.com
 *.wordpress.com
 *.epub
+
+*.org*/
+*.com*/

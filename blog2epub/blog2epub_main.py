@@ -19,6 +19,29 @@ class Blog2Epub:
     version = VERSION
     crawler: AbstractCrawler
 
+    ENGINES_MAP = {
+        "wordpress": WordpressCrawler,
+        "blogger": BlogspotCrawler,
+        "nrdblog_cmosnet": NrdblogCmosEuCrawler,
+        "zeissikonveb": ZeissIkonVEBCrawler
+    }
+
+    def get_crawler(self, url, engine, crawler_args):
+        self.crawler = DefaultCrawler(**crawler_args)  # type: ignore
+
+        if(engine == "default"):
+            if url.find(".blogspot.") > -1:
+                engine = "blogger"
+            if url.find(".wordpress.com") > -1:
+                engine = "wordpress"
+            if url.find("nrdblog.cmosnet.eu") > -1:
+                engine = "nrdblog_cmosnet"
+            if url.find("zeissikonveb.de") > -1:
+                engine = "zeissikonveb"
+
+        if(engine in self.ENGINES_MAP):
+            self.crawler = self.ENGINES_MAP[engine](**crawler_args)
+
     def __init__(
         self,
         url: str,
@@ -40,15 +63,7 @@ class Blog2Epub:
             "interface": interface,
         }
 
-        self.crawler = DefaultCrawler(**crawler_args)  # type: ignore
-        if url.find(".blogspot.") > -1:
-            self.crawler = BlogspotCrawler(**crawler_args)
-        if url.find(".wordpress.com") > -1:
-            self.crawler = WordpressCrawler(**crawler_args)
-        if url.find("nrdblog.cmosnet.eu") > -1:
-            self.crawler = NrdblogCmosEuCrawler(**crawler_args)  # type: ignore
-        if url.find("zeissikonveb.de") > -1:
-            self.crawler = ZeissIkonVEBCrawler(**crawler_args)  # type: ignore
+        self.get_crawler(url, configuration.engine, crawler_args)
 
     def download(self):
         self.crawler.crawl()

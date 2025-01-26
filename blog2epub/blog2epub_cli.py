@@ -15,6 +15,12 @@ class CliInterface(EmptyInterface):
         print(e)
 
 
+def validate_argument(arg_value, valid_values):
+    """Validates if the given argument value is in the list of valid values."""
+    if arg_value not in valid_values:
+        raise argparse.ArgumentTypeError(f"Invalid value. Choose from: {valid_values}")
+    return arg_value
+
 def main():
     parser = argparse.ArgumentParser(
         prog="Blog2epub Cli interface",
@@ -24,6 +30,8 @@ def main():
     parser.add_argument("-l", "--limit", type=int, default=None, help="articles limit")
     parser.add_argument("-s", "--skip", type=int, default=None, help="number of skipped articles")
     parser.add_argument("-q", "--quality", type=int, default=40, help="images quality (0-100)")
+    valid_engines = ["default", "wordpress", "blogger", "nrdblog_cmosnet", "nrdblog.cmosnet.eu"]
+    parser.add_argument("-e", "--engine", type=lambda x: validate_argument(x, valid_engines), default="default", help="specific engine to use for downloading. choose from: {}".format(valid_engines))
     parser.add_argument("-o", "--output", help="output epub file name")
     parser.add_argument("-d", "--debug", action="store_true", help="turn on debug")
     args = parser.parse_args()
@@ -32,6 +40,7 @@ def main():
         limit=str(args.limit),
         skip=str(args.skip),
         images_quality=args.quality,
+        engine=str(args.engine),
         filename=args.output,
     )
     blog2epub = Blog2Epub(
