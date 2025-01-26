@@ -174,6 +174,8 @@ class Downloader:
                 return supported_mimes[content_type]
         except requests.exceptions.ConnectionError or requests.exceptions.RequestException:
             pass
+        except requests.exceptions.HTTPError:
+            self.interface.print(f"Could not resolve image type for {url} due to HTTP Error")
 
         return None
 
