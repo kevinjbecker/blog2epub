@@ -147,16 +147,42 @@ class Downloader:
             f.write(response.content)
         time.sleep(1)
         return True
+    
+    def resolve_image_type(self, url: str) -> str | None:
+        # Retrieve the last part of the URL path and split off just the extension and query string
+        from_url = os.path.splitext(url)[1].lower().split("?")[0]
+
+        # URL indicates we support the file, no need for further checking
+        # the true mime will be guessed later on once downloaded
+        if from_url in [".jpeg", ".jpg", ".png", ".bmp", ".gif", ".webp", ".heic"]:
+            return from_url;
+
+        supported_mimes = {
+            "image/jpeg": ".jpg",
+            "image/png": ".png",
+            "image/bmp": ".bmp",
+            "image/gif": ".gif",
+            "image/webp": ".webp",
+            "image/heif": ".heic",
+        }
+        try:
+            response = self.session.head(url, cookies=self.cookies, headers=self.headers)
+            response.raise_for_headers()
+            content_type = response.headers.get("Content-Type", "").lower()
+
+            if(content_type in supported_mimes):
+                return supported_mimes[content_type]
+        except requests.exceptions.ConnectionError or requests.exceptions.RequestException:
+            pass
+
+        return None
 
     def download_image(self, image_obj: ImageModel) -> bool:
         if self._is_url_in_ignored(image_obj.url) or self._is_url_in_skipped(image_obj.url):
             return False
         image_obj.url = self._fix_image_url(image_obj.url)
         img_hash = self.get_urlhash(image_obj.url)
-        img_type = os.path.splitext(image_obj.url)[1].lower()
-        img_type = img_type.split("?")[0]
-        if img_type not in [".jpeg", ".jpg", ".png", ".bmp", ".gif", ".webp", ".heic"]:
-            return False
+        img_type = self.resolve_image_type(image_obj.url)
         original_fn = os.path.join(self.dirs.originals, img_hash + "." + img_type)
         resized_fn = os.path.join(self.dirs.images, img_hash + ".jpg")
         if os.path.isfile(resized_fn):

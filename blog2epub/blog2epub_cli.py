@@ -42,11 +42,12 @@ def main():
         images_quality=args.quality,
         engine=str(args.engine),
         filename=args.output,
+        destination_folder="./downloads",
     )
     blog2epub = Blog2Epub(
         url=args.url,
         configuration=configuration,
-        cache_folder=".",
+        cache_folder=configuration.destination_folder,
         interface=CliInterface(),
     )
     configuration.language = blog2epub.crawler.language
@@ -54,7 +55,7 @@ def main():
     ebook = Book(
         book_data=blog2epub.crawler.get_book_data(),
         configuration=configuration,
-        destination_folder=".",
+        destination_folder="./downloads",
         interface=CliInterface(),
         platform_name=f"CLI {platform.system()} {platform.release()}",
     )

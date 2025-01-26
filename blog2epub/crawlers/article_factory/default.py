@@ -96,7 +96,19 @@ class DefaultArticleFactory(AbstractArticleFactory):
                     images_in_pattern = self.tree.xpath(pattern.xpath)
                     for image_element in images_in_pattern:
                         try:
-                            image_url = image_element.xpath("@src")[0]
+                            try:
+                                image_parent = image_element.getparent()
+                                if image_parent is not None:
+                                    parent_url = image_parent.xpath("@href")[0]
+
+                                    self.interface.print(parent_url)
+
+                                    # Check if this potential HREF is an image link
+                                    if(self.downloader.resolve_image_type(parent_url) is not None):
+                                        image_url = parent_url
+                            except IndexError:
+                                image_url = image_element.xpath("@src")[0]
+                                pass
                         except IndexError:
                             break
                         try:
