@@ -167,7 +167,7 @@ class Downloader:
         }
         try:
             response = self.session.head(url, cookies=self.cookies, headers=self.headers)
-            response.raise_for_headers()
+            response.raise_for_status()
             content_type = response.headers.get("Content-Type", "").lower()
 
             if(content_type in supported_mimes):
