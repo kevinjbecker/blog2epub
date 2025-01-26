@@ -175,7 +175,7 @@ class Downloader:
         except requests.exceptions.ConnectionError or requests.exceptions.RequestException:
             pass
         except requests.exceptions.HTTPError:
-            self.interface.print(f"Could not resolve image type for {url} due to HTTP Error")
+            pass
 
         return None
 
