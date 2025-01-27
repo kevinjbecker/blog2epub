@@ -256,7 +256,7 @@ class Downloader:
         if img_type is None:
             self.interface.print("Cannot download image " + image_obj.url + " - unsupported type")
             return False
-        original_fn = os.path.join(self.dirs.originals, img_hash + "." + img_type)
+        original_fn = os.path.join(self.dirs.originals, img_hash + img_type)
         resized_fn = os.path.join(self.dirs.images, img_hash + ".jpg")
         if os.path.isfile(resized_fn):
             return True
