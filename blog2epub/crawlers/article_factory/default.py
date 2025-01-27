@@ -96,17 +96,14 @@ class DefaultArticleFactory(AbstractArticleFactory):
                     images_in_pattern = self.tree.xpath(pattern.xpath)
                     for image_element in images_in_pattern:
                         try:
-                            try:
-                                image_parent = image_element.getparent()
-                                if image_parent is not None:
-                                    parent_url = image_parent.xpath("@href")[0]
-                                    # Check if this potential HREF is actually image link and not a linkout to
-                                    # a partner site on a logo or something
-                                    if(self.downloader.resolve_image_type(parent_url) is not None):
-                                        image_url = parent_url
-                            except IndexError:
-                                image_url = image_element.xpath("@src")[0]
-                                pass
+                            image_url = image_element.xpath("@src")[0]
+                            image_parent = image_element.getparent()
+                            if image_parent is not None:
+                                parent_url = image_parent.xpath("@href")[0]
+                                # Check if this potential HREF is actually image link and not a linkout to
+                                # a partner site on a logo or something
+                                if(self.downloader.resolve_image_type(parent_url) is not None):
+                                    image_url = parent_url
                         except IndexError:
                             break
                         try:
@@ -120,6 +117,8 @@ class DefaultArticleFactory(AbstractArticleFactory):
                         if self.downloader.download_image(image_obj):
                             self.images_list.append(image_obj)
                             self.interface.print(".", end="")
+                            if(image_element is None):
+                                self.interface.print("<--(image_element_broken: {})".format(image_url), end="")
                             images_html.append(tostring(image_element))
             self._remove_images(images_html=images_html, images_list=self.images_list)
             # images will be inserted back after cleaning the content
@@ -266,6 +265,7 @@ class DefaultArticleFactory(AbstractArticleFactory):
                 content=self.get_content(),
                 comments=self.get_comments(),
             )
-        except ValueError:
+        except ValueError as e:
             self.interface.print(f"Contents of: {self.url} can not be parsed. Skipping!")
+            self.interface.print(e)
             return None

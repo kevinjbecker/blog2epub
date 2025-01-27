@@ -26,6 +26,7 @@ class BlogspotArticleFactory(DefaultArticleFactory):
                 content=self.get_content(),
                 comments=self.get_comments(),
             )
-        except ValueError:
+        except ValueError as e:
             self.interface.print(f"Contents of: {self.url} can not be parsed. Skipping!")
+            self.interface.print(e)
             return None

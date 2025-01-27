@@ -238,6 +238,8 @@ class DefaultCrawler(AbstractCrawler):
         robots_parser.read()
         if hasattr(robots_parser, "sitemaps") and robots_parser.sitemaps:
             sitemap_url = robots_parser.sitemaps[0]
+        elif self.configuration.engine == "wordpress":
+            sitemap_url = urljoin(self.url, "/wp-sitemap.xml")
         else:
             sitemap_url = urljoin(self.url, "/sitemap.xml")
         return sitemap_url

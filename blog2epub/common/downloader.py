@@ -3,8 +3,9 @@ import hashlib
 import os
 import re
 import time
+import base64
 from collections.abc import Mapping
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 
 import filetype  # type: ignore
 import requests
@@ -108,6 +109,12 @@ class Downloader:
         for _x in range(0, 3):
             if not os.path.isfile(filepath) and not os.path.isfile(filepath + ".gz"):
                 contents = self.file_download(url, filepath)
+
+                if contents is not None:
+                    # TODO:
+                    # Determine if we have _any_ content, or if we need to make an 
+                    # intelligent fetch to the API
+                    pass
             else:
                 contents = self.file_read(filepath)
             if contents is not None:
@@ -127,6 +134,10 @@ class Downloader:
 
     def _fix_image_url(self, img: str) -> str:
         if not img.startswith("http"):
+            # Support data:image/... URL (no transformation needed)
+            if img.startswith("data:"):
+                return img;
+
             uri = urlparse(self.url)
             if uri.netloc not in img:
                 img = os.path.join(uri.netloc, img)
@@ -134,29 +145,51 @@ class Downloader:
                 img = "/" + img
             img = f"{uri.scheme}:{img}"
         return img
+    
+    def _get_image_bytes_from_web(self, url: str) -> bytes:
+        response = self.session.get(url, cookies=self.cookies, headers=self.headers)
+        return response.content
+
+    def _get_image_bytes_from_data_url(self, url: str) -> bytes | None:
+        metadata, encoded_img = url.split(',', 1)
+        # The first value will always be the mime type (image/png, image/svg+xml, etc.)
+        _, encoding = metadata.split(';', 1)
+
+        img = encoded_img
+        try:
+            # Check if we need to base64 decode the data
+            if 'base64' in encoding:
+                img = base64.b64decode(img)
+
+            # Check if there's a charset=<something> value to decode
+            if 'charset=' in encoding:
+                charset = encoding.split('charset=')[1].split(';')[0]
+                img = img.decode(charset)
+        except Exception:
+            return None
+
+        return img
+
 
     def _download_image(self, url: str, filepath: str) -> bool | None:
         if self._is_url_in_ignored(url) or self._is_url_in_skipped(url):
             return None
         prepare_directories(self.dirs)
         try:
-            response = self.session.get(url, cookies=self.cookies, headers=self.headers)
+            image_bytes = self._get_image_bytes_from_data_url(url) if url.startswith('data:') \
+                else self._get_image_bytes_from_web(url)
+            
+            if image_bytes is None:
+                self.interface.print("Cannot download image " + url + " - unsupported type")
+                return False
         except requests.exceptions.ConnectionError:
             return False
         with open(filepath, "wb") as f:
-            f.write(response.content)
+            f.write(image_bytes)
         time.sleep(1)
         return True
     
     def resolve_image_type(self, url: str) -> str | None:
-        # Retrieve the last part of the URL path and split off just the extension and query string
-        from_url = os.path.splitext(url)[1].lower().split("?")[0]
-
-        # URL indicates we support the file, no need for further checking
-        # the true mime will be guessed later on once downloaded
-        if from_url in [".jpeg", ".jpg", ".png", ".bmp", ".gif", ".webp", ".heic"]:
-            return from_url;
-
         supported_mimes = {
             "image/jpeg": ".jpg",
             "image/png": ".png",
@@ -164,7 +197,28 @@ class Downloader:
             "image/gif": ".gif",
             "image/webp": ".webp",
             "image/heif": ".heic",
+            "image/svg+xml": ".svg",
         }
+
+        if url.startswith('data:'):
+            _, encoded_img = url.split(':', 1)
+            metadata, _ = encoded_img.split(',', 1)
+            mime_type, _ = metadata.split(';', 1)
+
+            if mime_type in supported_mimes:
+                return supported_mimes[mime_type]
+
+            return None
+
+
+        # Retrieve the last part of the URL path and split off just the extension and query string
+        from_url = os.path.splitext(url)[1].lower().split("?")[0]
+
+        # URL indicates we support the file, no need for further checking
+        # the true mime will be guessed later on once downloaded
+        if from_url in [".jpeg", ".jpg", ".png", ".bmp", ".gif", ".webp", ".heic"]:
+            return from_url
+    
         try:
             response = self.session.head(url, cookies=self.cookies, headers=self.headers)
             response.raise_for_status()
@@ -178,6 +232,20 @@ class Downloader:
             pass
 
         return None
+    
+    def _has_transparency(self, picture: Image.Image) -> bool:
+        if picture.info.get("transparency", None) is not None:
+            return True
+        if picture.mode == "P":
+            transparent = picture.info.get("transparency", -1)
+            for _, index in picture.getcolors():
+                if index == transparent:
+                    return True
+        elif picture.mode == "RGBA":
+            extrema = picture.getextrema()
+            if extrema[3][0] < 255:
+                return True
+        return False
 
     def download_image(self, image_obj: ImageModel) -> bool:
         if self._is_url_in_ignored(image_obj.url) or self._is_url_in_skipped(image_obj.url):
@@ -185,6 +253,9 @@ class Downloader:
         image_obj.url = self._fix_image_url(image_obj.url)
         img_hash = self.get_urlhash(image_obj.url)
         img_type = self.resolve_image_type(image_obj.url)
+        if img_type is None:
+            self.interface.print("Cannot download image " + image_obj.url + " - unsupported type")
+            return False
         original_fn = os.path.join(self.dirs.originals, img_hash + "." + img_type)
         resized_fn = os.path.join(self.dirs.images, img_hash + ".jpg")
         if os.path.isfile(resized_fn):
@@ -208,10 +279,25 @@ class Downloader:
             if picture.size[0] > self.images_size[0] or picture.size[1] > self.images_size[1]:
                 picture.thumbnail(self.images_size, Image.LANCZOS)  # type: ignore
             
-            if(picture.mode != "RGB"):
+            # Convert picture to RGB mode (with an intermediary step to RGBA if needed)
+            if picture.mode != "RGB":
+                if self._has_transparency(picture):
+                    __p = picture
+                    try:
+                        rgba_picture = picture.convert("RGBA")
+                        # Create a new background image based on the picture, fill it with white
+                        bg = Image.new("RGBA", picture.size, (255, 255, 255))
+                        # Create an alpha composite of the background with the picture
+                        picture = Image.alpha_composite(bg, rgba_picture)
+                        # And only if all of this succeeds do we close the old picture file
+                        __p.close()
+                    except ValueError:
+                        self.interface.print("Cannot explicitly cull alpha layer, falling back on pillow", end="")
+                        # Restore old picture if nothing can be done here
+                        picture = __p
+                        pass
                 picture = picture.convert("RGB")
 
-            #converted_picture = picture.convert("L")
             picture.save(resized_fn, format="JPEG", quality=self.images_quality)
             try:
                 os.remove(original_fn)
